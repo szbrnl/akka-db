@@ -20,8 +20,7 @@ lazy val `akka-sample-cluster-scala` = project
       "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion,
       "com.typesafe.akka" %% "akka-distributed-data" % akkaVersion,
-      "org.scalatest" %% "scalatest" % "3.0.1" % Test,
-      "io.kamon" % "sigar-loader" % "1.6.6-rev002"),
+      "org.scalatest" %% "scalatest" % "3.0.1" % Test),
     fork in run := true,
     mainClass in (Compile, run) := Some("sample.cluster.simple.SimpleClusterApp"),
     // disable parallel tests
