@@ -77,7 +77,7 @@ class SimpleClusterListener extends Actor with ActorLogging{
 
 
     case RealAdd(key: String, value: String) =>
-      println("real add: " + key + " " + value) 
+      println("real add: " + key + " " + value)
 
 
 
