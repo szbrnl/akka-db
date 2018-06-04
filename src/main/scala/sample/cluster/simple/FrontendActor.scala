@@ -39,6 +39,7 @@ class FrontendActor extends Actor {
 
     case addKeyVal: Add =>
       println(databaseBackends.size.toString)
+
       databaseBackends(Random.nextInt(databaseBackends.size)) forward addKeyVal
 
     case BackendRegistration if !databaseBackends.contains(sender()) =>
@@ -57,15 +58,6 @@ object FrontendActor {
   private var _proxy:ActorRef = _
 
 
-  //  def initiate() = {
-  //    val config = ConfigFactory.load().getConfig("FrontendAPI")
-  //
-  //    val system = ActorSystem("ClusterSystem", config)
-  //
-  //    _frontend = system.actorOf(Props[FrontendActor], name = "frontend-api")
-  //
-  //  }
-
   def initiate(): Unit = {
     val port = "0"
     val config = ConfigFactory.parseString(
@@ -79,22 +71,6 @@ object FrontendActor {
     val system = ActorSystem("ClusterSystem", config)
     // Create an actor that handles cluster domain events
     _frontend = system.actorOf(Props[FrontendActor], name = "frontend-api")
-
-//    val system = ActorSystem("ClusterSystem", config)
-//    _frontend = system.actorOf(
-//      ClusterSingletonManager.props(
-//        singletonProps = Props(classOf[FrontendActor]),
-//        terminationMessage = End,
-//        settings = ClusterSingletonManagerSettings(system).withRole("frontendapi")),
-//      name = "frontend-api"
-//    )
-//
-//    _proxy = system.actorOf (
-//      ClusterSingletonProxy.props (
-//        singletonManagerPath = "/user/consumer",
-//        settings = ClusterSingletonProxySettings (system).withRole ("frontend-api") ),
-//      name = "consumerProxy")
-//    //      Props[FrontendActor], name = "frontend")
   }
 
   def getFrontend() = _frontend

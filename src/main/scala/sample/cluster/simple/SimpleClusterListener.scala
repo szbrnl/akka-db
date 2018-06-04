@@ -1,34 +1,85 @@
 package sample.cluster.simple
 
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, RootActorPath}
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent._
-import akka.actor.{Actor, ActorLogging, ActorRef, RootActorPath}
-import akka.cluster.ddata.Replicator._
-import akka.cluster.ddata._
 import akka.cluster.pubsub.DistributedPubSub
+import com.typesafe.config.ConfigException.Null
+import com.typesafe.config.ConfigFactory
+import sample.cluster.simple.FrontendActor._frontend
 import sample.cluster.transformation.BackendRegistration
-import scala.concurrent.duration._
-import akka.cluster.ddata.ORMultiMap
 
 
+object SimpleClusterListener
+{
+  def initiate(_port : String): Unit = {
+    var port = _port
+    if (port == "") port = "0"
 
-class SimpleClusterListener extends Actor with ActorLogging {
+    val config = ConfigFactory.parseString(
+      s"""
+        akka.remote.netty.tcp.port=$port
+        akka.remote.artery.canonical.port=$port
+        """)
+      .withFallback(ConfigFactory.parseString("akka.cluster.roles = [backend]"))
+      .withFallback(ConfigFactory.load())
+
+    val system = ActorSystem("ClusterSystem", config)
+    // Create an actor that handles cluster domain events
+    system.actorOf(Props[SimpleClusterListener], name = "backend-api")
+  }
+}
+
+
+class SimpleClusterListener extends Actor with ActorLogging{
+
 
   val cluster = Cluster(context.system)
-  val replicator = DistributedData(context.system).replicator
   val mediator: ActorRef = DistributedPubSub(context.system).mediator
-  val dataMap = ORSetKey[(String, String)]("key")
+/*
+  var position = 0
+  setPosition(cluster)
+
+  def setPosition(cluster : Cluster) = {
+    var backends = 1
+    for (member <- cluster.state.members) {
+      if (!member.hasRole("frontendapi")) backends += 1
+    }
+    for (i <- 0 to 20) {
+      val num = 2 ^ i
+      for (j <- 0 to num) {
+        val pos = (1000000 / num) * j
+        var flag = 0
+        for (member <- cluster.state.members) {
+          if (!member.hasRole("frontendapi"))
+            context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! GetPosition()
+          def receive = {
+            case p: Int =>
+              if (p == pos) flag = 1
+          }
+        }
+        if (flag == 0) position = pos
+      }
+    }
+  }
+
+  def getPosition() : Int = {
+    return position
+  }
+
+*/
+
+
 
   // subscribe to cluster changes, re-subscribe when restart
   override def preStart(): Unit = {
     cluster.subscribe(self, initialStateMode = InitialStateAsEvents,
       classOf[MemberEvent], classOf[UnreachableMember])
+
   }
 
-  replicator ! Subscribe(dataMap, self)
 
   override def postStop(): Unit = cluster.unsubscribe(self)
-  var kkey = ""
   def receive = {
     case msg : String =>
       log.info("hello darkness my old friend")
@@ -38,6 +89,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
       if(member.hasRole("frontendapi")) {
         context.actorSelection(RootActorPath(member.address) / "user" / "frontend-api") !
           BackendRegistration
+        println("test receive'a\n")
 
       }
 
@@ -54,26 +106,18 @@ class SimpleClusterListener extends Actor with ActorLogging {
  //     println(dataMap.getEntries())
 
       log.info("Member detected as unreachable: {}", member)
+/*
+    case GetPosition() =>
+      println("Position request")
+      sender ! getPosition()
+*/
     case MemberRemoved(member, previousStatus) =>
       log.info("Member is Removed: {} after {}",
         member.address, previousStatus)
 
     case Add(key : String, value : String) =>
-      val write = WriteTo(n = 1, timeout = 5.seconds)
 
-      kkey = key
-      val Counter1Key = PNCounterKey(key)
-      replicator ! Update(dataMap, ORSet.empty[(String, String)],write)(_ + (key.toString, value.toString))
       println("dodawanie " + key + " " + value)
-
-      val read = ReadLocal
-      replicator ! Get(Counter1Key, read)
-
-    case g @ GetSuccess(_, req) =>
-      val value = g.get(PNCounterKey(kkey)).value
-      println("jest tutaj" + value)
-    case NotFound(_, req) => // key counter1 does not exist
-      println("nie ma tutaj")
 
       // TODO
     case GetOne(key) =>
