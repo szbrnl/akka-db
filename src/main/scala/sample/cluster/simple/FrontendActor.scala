@@ -12,10 +12,10 @@ import scala.util.Random
 
 class FrontendActor extends Actor {
 
-  var databaseBackends = IndexedSeq.empty[ActorRef]
+  var databaseBackends: IndexedSeq[ActorRef] = IndexedSeq.empty[ActorRef]
   val cluster = Cluster(context.system)
 
-  val proxy = context.system.actorOf (
+  val proxy: ActorRef = context.system.actorOf (
     ClusterSingletonProxy.props (
       singletonManagerPath = "/user/frontend-api",
       settings = ClusterSingletonProxySettings (context.system).withRole ("frontendapi") ),
