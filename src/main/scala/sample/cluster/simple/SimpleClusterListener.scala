@@ -20,6 +20,8 @@ class SimpleClusterListener extends Actor with ActorLogging {
   var currentMember: Option[Member] = None
 
   var initNode: Boolean = false
+  var selfAddress : Address = null
+
 
   // subscribe to cluster changes, re-subscribe when restart
   override def preStart(): Unit = {
@@ -32,6 +34,41 @@ class SimpleClusterListener extends Actor with ActorLogging {
   }
 
   override def postStop(): Unit = cluster.unsubscribe(self)
+
+
+
+  def findNodeAddress(key : Object): Address = {
+    val keyPos = key.hashCode % 1000000
+    var min = 1000000
+    var minAddr: Address = null
+
+    for (member <- cluster.state.members) {
+      if (!member.hasRole("frontendapi") && member.address.hashCode % 1000000 >= keyPos && member.address.hashCode % 1000000 < min) {
+        min = member.address.hashCode % 1000000
+        minAddr = member.address
+      }
+    }
+    // If null -> find the lowest
+    if (minAddr == null) {
+      println("nullem jestem")
+      var min = 1000000
+
+      for (member <- cluster.state.members) {
+        if (member.address.hashCode % 1000000 <= min)
+          minAddr = member.address
+      }
+    }
+
+    minAddr
+  }
+
+
+  // returns true if the current node is the successor of the node with a given address
+  def harryYouAreTheChosenOne(addr: Address) = {
+
+  }
+
+
 
   def receive = {
     case msg: String =>
@@ -69,6 +106,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
 
       }
 
+
     case UnreachableMember(member) =>
       log.info("Member detected as unreachable: {}", member)
 
@@ -82,33 +120,18 @@ class SimpleClusterListener extends Actor with ActorLogging {
     case Add(key: String, value: String) =>
       println("dodawanie " + key + " " + value)
 
-      val keyPos = key.hashCode % 1000000
-      var min = 1000000
-      var minAddr: Address = null
+      val minAddr = findNodeAddress(key)
+      val nextMinAddr = findNodeAddress(minAddr)
 
-
-      // TODO refactor
-      for (member <- cluster.state.members) {
-        if (!member.hasRole("frontendapi") && member.address.hashCode % 1000000 >= keyPos && member.address.hashCode % 1000000 < min) {
-          min = member.address.hashCode
-          minAddr = member.address
-        }
-      }
-      // If null -> find the lowest
-      if (minAddr == null) {
-        println("nullem jestem")
-        var min = 1000000
-
-        for (member <- cluster.state.members) {
-          if (member.address.hashCode % 1000000 <= min)
-            minAddr = member.address
-        }
-      }
       context.actorSelection(RootActorPath(minAddr) / "user" / "clusterListener") ! RealAdd(key, value)
+
+      if (minAddr != nextMinAddr)
+        context.actorSelection(RootActorPath(nextMinAddr) / "user" / "clusterListener") ! RealAdd(key, value)
 
 
     case RealAdd(key: String, value: String) =>
       println("real add: " + key + " " + value)
+
 
 
     // TODO
