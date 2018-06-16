@@ -1,11 +1,13 @@
 package sample.cluster.simple
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Address, RootActorPath}
-import akka.cluster.Cluster
+import akka.cluster.{Cluster, Member, MemberStatus}
 import akka.cluster.ClusterEvent._
 import akka.cluster.pubsub.DistributedPubSub
 import com.typesafe.config.ConfigException.Null
 import sample.cluster.transformation.BackendRegistration
+
+import scala.collection.mutable
 
 
 class SimpleClusterListener extends Actor with ActorLogging {
@@ -14,28 +16,58 @@ class SimpleClusterListener extends Actor with ActorLogging {
   val cluster = Cluster(context.system)
   val mediator: ActorRef = DistributedPubSub(context.system).mediator
 
+  var nodes: mutable.SortedMap[Int, Member] = mutable.SortedMap[Int, Member]()
+  var currentMember: Option[Member] = None
+
+  var initNode: Boolean = false
 
   // subscribe to cluster changes, re-subscribe when restart
   override def preStart(): Unit = {
+    if (cluster.state.members.count(_.status == MemberStatus.up) == 1) {
+      initNode = true
+    }
+
     cluster.subscribe(self, initialStateMode = InitialStateAsEvents,
       classOf[MemberEvent], classOf[UnreachableMember])
-
   }
-
 
   override def postStop(): Unit = cluster.unsubscribe(self)
 
   def receive = {
     case msg: String =>
       log.info(msg)
+      println(currentMember.get.address)
+
 
     case MemberUp(member) =>
       log.info("Member is Up: {}", member.address)
+
       if (member.hasRole("frontendapi")) {
         context.actorSelection(RootActorPath(member.address) / "user" / "frontend-api") !
           BackendRegistration
       }
+      else {
+        currentMember match {
+          case None =>
+            if (initNode) {
+              log.info("welcome received {}", member.address)
+              currentMember = Some(member)
+            }
+          case _ =>
+            context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! WelcomeMessage(member)
+            nodes = nodes.+((member.address.port.hashCode(), member))
+        }
+      }
 
+
+    case WelcomeMessage(member) =>
+      currentMember match {
+        case None =>
+          log.info("welcome1 received {}", member.address)
+          currentMember = Some(member)
+        case _ => // Ignore
+
+      }
 
     case UnreachableMember(member) =>
       log.info("Member detected as unreachable: {}", member)
@@ -44,6 +76,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
     case MemberRemoved(member, previousStatus) =>
       log.info("Member is Removed: {} after {}",
         member.address, previousStatus)
+      nodes = nodes.-(member.address.hashCode)
 
 
     case Add(key: String, value: String) =>
