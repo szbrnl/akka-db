@@ -1,0 +1,4 @@
+1. wywalić modulo miliun
+2. Operation rozbić na osobne pliki (wydaje mi się że będzie bardziej scalowo)
+3. nulle na Option[]
+4. jakieś testy (?)
