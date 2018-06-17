@@ -49,6 +49,21 @@ class FrontendActor extends Actor {
 
     case Terminated(a) =>
       databaseBackends = databaseBackends.filterNot(_ == a)
+
+
+    case getValue: GetOne =>
+      databaseBackends(Random.nextInt(databaseBackends.size)) forward getValue
+
+
+    case Result(value) =>
+      value match {
+        case Some(value) => printf("Received value: " + value)
+        case _ => printf("No such key in the database")
+      }
+
+
+    case _ =>
+      printf("No match")
   }
 }
 
