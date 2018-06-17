@@ -20,7 +20,8 @@ class SimpleClusterListener extends Actor with ActorLogging {
   var currentMember: Option[Member] = None
 
   var initNode: Boolean = false
-  var selfAddress : Address = null
+
+  var dataMap: mutable.HashMap[String, String] = mutable.HashMap[String, String]()
 
 
   // subscribe to cluster changes, re-subscribe when restart
@@ -37,7 +38,9 @@ class SimpleClusterListener extends Actor with ActorLogging {
 
 
 
-  def findNodeAddress(key : Object): Address = {
+  def findSuccessorNode(key : Object): Address = {
+
+  /*
     val keyPos = key.hashCode % 1000000
     var min = 1000000
     var minAddr: Address = null
@@ -58,14 +61,32 @@ class SimpleClusterListener extends Actor with ActorLogging {
           minAddr = member.address
       }
     }
-
     minAddr
+ */
+
+    for (node <- nodes) {
+      if (node._1 % 1000000 > key.hashCode() % 1000000)
+        return node._2.address
+    }
+    return nodes.head._2.address
+
   }
 
 
   // returns true if the current node is the successor of the node with a given address
   def harryYouAreTheChosenOne(addr: Address) = {
+    currentMember.get.address == findSuccessorNode(addr)
+  }
 
+
+  def findPredecessorNode(key: Object): Address = {
+    var addr = nodes.last._2.address
+    for (node <- nodes) {
+      if (node._2.address.hashCode % 1000000 > key.hashCode % 1000000)
+        return addr
+      addr = node._2.address
+    }
+    nodes.last._2.address
   }
 
 
@@ -116,12 +137,54 @@ class SimpleClusterListener extends Actor with ActorLogging {
         member.address, previousStatus)
       nodes = nodes.-(member.address.hashCode)
 
+      if (harryYouAreTheChosenOne(member.address)) {
+
+        // copy data for which the removed member was the primary node (copy to the successor or current node)
+        // if current node is 3 and the removed one was 2
+        //    you need to know the hash of node 2 and the data from node 3 (current node)
+        //    you copy the data to node 4
+        val hashPos = member.address.hashCode % 1000000
+        var pack : mutable.Map[String, String] = mutable.Map[String, String]()
+        for ((key, value) <- dataMap) {
+          if (key.hashCode % 1000000 <= hashPos ||
+             (key.hashCode % 1000000 > hashPos) && key.hashCode % 1000000 > nodes.last._2.address.hashCode % 1000000) {
+            pack.+((key, value))
+          }
+        }
+        context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address)) / "user" / "clusterListener") ! DataPackage(pack)
+
+        // copy data for which the removed member was the backup node (copy to the current node)
+        // if current node is 3 and the removed one was 2
+        //    you need to know the hash of node 0 and the data from node 1
+        //    you copy the data to node 3 (current node)
+
+        // sending request to the predecessor of the removed node (removed node is no longer in 'nodes')
+        context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address)) / "user" / "clusterListener") ! DataPackageRequest()
+      }
+
+
+    case DataPackage(pack : mutable.Map[String, String]) =>
+      for (item <- pack) {
+        dataMap.+(item)
+      }
+
+
+    // to find the data for which the removed node was the backup node we have to find all data for which the predecessor of the removed node is the primary node
+    case DataPackageRequest() =>
+      var map : mutable.Map[String, String] = mutable.Map[String, String]()
+      for ((key, value) <- dataMap) {
+        if (findSuccessorNode(key) == currentMember.get.address) {
+          map.+((key, value))
+        }
+      }
+      sender ! DataPackage(map)
+
 
     case Add(key: String, value: String) =>
       println("dodawanie " + key + " " + value)
 
-      val minAddr = findNodeAddress(key)
-      val nextMinAddr = findNodeAddress(minAddr)
+      val minAddr = findSuccessorNode(key)
+      val nextMinAddr = findSuccessorNode(minAddr)
 
       context.actorSelection(RootActorPath(minAddr) / "user" / "clusterListener") ! RealAdd(key, value)
 
@@ -131,7 +194,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
 
     case RealAdd(key: String, value: String) =>
       println("real add: " + key + " " + value)
-
+      dataMap.+((key, value))
 
 
     // TODO
