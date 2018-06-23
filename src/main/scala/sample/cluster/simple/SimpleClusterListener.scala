@@ -38,8 +38,8 @@ class SimpleClusterListener extends Actor with ActorLogging {
 
 
 
-  def findSuccessorNode(key : Object): Address = {
-
+  def findSuccessorNode(key : Object): Option[Address] = {
+/*
 //    printf("key: " + key + "\n")
     val keyPos = key.hashCode
     var min = Int.MaxValue
@@ -69,22 +69,25 @@ class SimpleClusterListener extends Actor with ActorLogging {
     printf("return port: " + minAddr.port + "\n")
     minAddr
 
+*/
 
-
-    //TODO There is an error to be found - error when 'for' finishes without returning a value
-/*
-    for (node <- nodes) {
-      if (node._1 % 1000000 > key.hashCode() % 1000000)
-        return node._2.address
+    if (nodes.isEmpty) {
+      println("No nodes in cluster")
+      None
     }
-    return nodes.head._2.address.
-      */
+
+    for (node <- nodes) {
+      if (node._1 > key.hashCode())
+        return Some(node._2.address)
+    }
+
+    Some(nodes.head._2.address)
   }
 
 
   // returns true if the current node is the successor of the node with a given address
   def harryYouAreTheChosenOne(addr: Address): Boolean = {
-    currentMember.get.address == findSuccessorNode(addr.port)
+    currentMember.get.address == findSuccessorNode(addr.port).get
   }
 
 
@@ -96,7 +99,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
     else {
       var addr = nodes.last._2.address
       for (node <- nodes) {
-        if (node._2.address.port.hashCode > key.hashCode)
+        if (node._1 > key.hashCode)
           return Some(addr)
         addr = node._2.address
       }
@@ -166,7 +169,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
             pack.+((key, value))
           }
         }
-        context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port)) / "user" / "clusterListener") ! DataPackage(pack)
+        context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port).get) / "user" / "clusterListener") ! DataPackage(pack)
 
         // copy data for which the removed member was the backup node (copy to the current node)
         // if current node is 3 and the removed one was 2
@@ -191,7 +194,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
       println("Data Package Request")
       var map : mutable.Map[String, String] = mutable.Map[String, String]()
       for ((key, value) <- dataMap) {
-        if (findSuccessorNode(key) == currentMember.get.address) {
+        if (findSuccessorNode(key).get == currentMember.get.address) {
           println("key: " + key + " value: " + value)
           map.put(key, value)
         }
@@ -202,8 +205,8 @@ class SimpleClusterListener extends Actor with ActorLogging {
     case Add(key: String, value: String) =>
       println("dodawanie " + key + " " + value)
 
-      val minAddr = findSuccessorNode(key)
-      val nextMinAddr = findSuccessorNode(minAddr.port)
+      val minAddr = findSuccessorNode(key).get
+      val nextMinAddr = findSuccessorNode(minAddr.port).get
 
       context.actorSelection(RootActorPath(minAddr) / "user" / "clusterListener") ! RealAdd(key, value)
 
@@ -221,7 +224,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
     // TODO
     case GetOne(key) =>
       sender ! "getOne here"
-      context.actorSelection(RootActorPath(findSuccessorNode(key)) / "user" / "clusterListener") ! RealGetOne(key, sender)
+      context.actorSelection(RootActorPath(findSuccessorNode(key).get) / "user" / "clusterListener") ! RealGetOne(key, sender)
 
     case RealGetOne(key, node) =>
      for ((key, value) <- dataMap)
