@@ -125,13 +125,27 @@ class SimpleClusterListener extends Actor with ActorLogging {
       else {
         currentMember match {
           case None =>
+            // new node
             if (initNode) {
               log.info("welcome received {}", member.address)
               currentMember = Some(member)
             }
           case _ =>
+            // old node
             context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! WelcomeMessage(member)
             nodes = nodes.+((member.address.port.hashCode, member))
+
+            var pack = mutable.Map[String, String]()
+            for ((key, value) <- dataMap){
+              if (findSuccessorNode(key).get == member.address) {
+                pack.put(key, value)
+                dataMap.remove(key)
+              }
+              context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! DataPackage(pack)
+              context.actorSelection(RootActorPath(findSuccessorNode(member.address).get) / "user" / "clusterListener") ! DataPackage(pack)
+            }
+
+
         }
       }
 
@@ -237,6 +251,17 @@ class SimpleClusterListener extends Actor with ActorLogging {
          context.actorSelection(RootActorPath(node.path.address) / "user" / "frontend-api") ! Result(None)
          printf("No such key in this node")
      }
+
+
+    case Delete(key) =>
+      val addr = findSuccessorNode(key).get
+      val nextAddr = findSuccessorNode(addr).get
+      context.actorSelection(RootActorPath(addr) / "user" / "clusterListener") ! RealDelete(key)
+      context.actorSelection(RootActorPath(nextAddr) / "user" / "clusterListener") ! RealDelete(key)
+
+
+    case RealDelete(key) =>
+      dataMap.remove(key)
 
 
     //TODO
