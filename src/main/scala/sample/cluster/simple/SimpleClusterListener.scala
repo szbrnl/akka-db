@@ -40,27 +40,27 @@ class SimpleClusterListener extends Actor with ActorLogging {
 
   def findSuccessorNode(key : Object): Address = {
 
-    printf("key: " + key + "\n")
-    val keyPos = key.hashCode % 1000000
-    var min = 1000000
+//    printf("key: " + key + "\n")
+    val keyPos = key.hashCode
+    var min = Int.MaxValue
     var minAddr: Address = null
 
     for (member <- cluster.state.members) {
-      printf(member.address.port + "\n")
-      if (!member.hasRole("frontendapi") && member.address.port.hashCode % 1000000 > keyPos && member.address.port.hashCode % 1000000 < min) {
-        min = member.address.port.hashCode % 1000000
+ //     printf(member.address.port + "\n")
+      if (!member.hasRole("frontendapi") && member.address.port.hashCode > keyPos && member.address.port.hashCode < min) {
+        min = member.address.port.hashCode
         minAddr = member.address
       }
     }
     // If null -> find the lowest
     if (minAddr == null) {
-      println("nullem jestem")
-      var min = 1000000
+ //     println("nullem jestem")
+      var min = Int.MaxValue
 
       for (member <- cluster.state.members) {
-        if (member.address.port.hashCode % 1000000 <= min && !member.hasRole("frontendapi"))
+        if (member.address.port.hashCode <= min && !member.hasRole("frontendapi"))
           {
-            min = member.address.port.hashCode() % 1000000
+            min = member.address.port.hashCode()
             minAddr = member.address
           }
 
@@ -88,14 +88,20 @@ class SimpleClusterListener extends Actor with ActorLogging {
   }
 
 
-  def findPredecessorNode(key: Object): Address = {
-    var addr = nodes.last._2.address
-    for (node <- nodes) {
-      if (node._2.address.port.hashCode % 1000000 > key.hashCode % 1000000)
-        return addr
-      addr = node._2.address
+  def findPredecessorNode(key: Object): Option[Address] = {
+    if (nodes.isEmpty){
+      println("No nodes in cluster")
+      None
     }
-    nodes.last._2.address
+    else {
+      var addr = nodes.last._2.address
+      for (node <- nodes) {
+        if (node._2.address.port.hashCode > key.hashCode)
+          return Some(addr)
+        addr = node._2.address
+      }
+      Some(nodes.last._2.address)
+    }
   }
 
 
@@ -146,17 +152,17 @@ class SimpleClusterListener extends Actor with ActorLogging {
         member.address, previousStatus)
       nodes = nodes.-(member.address.port.hashCode)
 
-      if (harryYouAreTheChosenOne(member.address)) {
+      if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
 
         // copy data for which the removed member was the primary node (copy to the successor or current node)
         // if current node is 3 and the removed one was 2
         //    you need to know the hash of node 2 and the data from node 3 (current node)
         //    you copy the data to node 4
-        val hashPos = member.address.port.hashCode % 1000000
+        val hashPos = member.address.port.hashCode
         var pack : mutable.Map[String, String] = mutable.Map[String, String]()
         for ((key, value) <- dataMap) {
-          if (key.hashCode % 1000000 <= hashPos ||
-             (key.hashCode % 1000000 > hashPos) && key.hashCode % 1000000 > nodes.last._2.address.port.hashCode % 1000000) {
+          if (key.hashCode <= hashPos ||
+             (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.hashCode) {
             pack.+((key, value))
           }
         }
@@ -168,22 +174,26 @@ class SimpleClusterListener extends Actor with ActorLogging {
         //    you copy the data to node 3 (current node)
 
         // sending request to the predecessor of the removed node (removed node is no longer in 'nodes')
-        context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address)) / "user" / "clusterListener") ! DataPackageRequest()
+        context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address).get) / "user" / "clusterListener") ! DataPackageRequest()
       }
 
 
     case DataPackage(pack : mutable.Map[String, String]) =>
+      println("Data Package")
       for ((key, value) <- pack) {
+        println("key: " + key + " value: " + value)
         dataMap.put(key, value)
       }
 
 
     // to find the data for which the removed node was the backup node we have to find all data for which the predecessor of the removed node is the primary node
     case DataPackageRequest() =>
+      println("Data Package Request")
       var map : mutable.Map[String, String] = mutable.Map[String, String]()
       for ((key, value) <- dataMap) {
         if (findSuccessorNode(key) == currentMember.get.address) {
-          map.+((key, value))
+          println("key: " + key + " value: " + value)
+          map.put(key, value)
         }
       }
       sender ! DataPackage(map)
