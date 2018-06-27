@@ -1,27 +1,29 @@
 package sample.cluster.simple
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props, Terminated}
-import akka.cluster.Cluster
+import akka.cluster.{Cluster, Member}
 import akka.cluster.ClusterEvent.MemberUp
-import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
+import akka.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
 import com.typesafe.config.ConfigFactory
+import sample.cluster.simple.message.{PrepareReport, SendStatusReport, StatusReport}
 import sample.cluster.transformation.BackendRegistration
 
-import scala.util.Random
-
+import scala.collection.mutable
 
 class ClusterStatsPresenterActor extends Actor {
 
   var databaseBackends: IndexedSeq[ActorRef] = IndexedSeq.empty[ActorRef]
   val cluster = Cluster(context.system)
 
+  var receivedReports = 0
+  var dataSet: Set[String] = Set[String]()
+  var nodeDataSet: mutable.HashMap[Member, Set[String]] = mutable.HashMap()
+
   val proxy: ActorRef = context.system.actorOf (
     ClusterSingletonProxy.props (
       singletonManagerPath = "/user/cluster-stats",
       settings = ClusterSingletonProxySettings (context.system).withRole ("clusterstats") ),
-    name = "consumerProxy")
-
-
+    name = "consumerProxyStats")
 
   override def preStart(): Unit = {
     cluster.subscribe(self, classOf[MemberUp])
@@ -29,6 +31,18 @@ class ClusterStatsPresenterActor extends Actor {
 
   override def postStop(): Unit = {
     cluster.unsubscribe(self)
+  }
+
+  def printReport(): String = {
+    val builder = new mutable.StringBuilder()
+
+    for (elem <- nodeDataSet) {
+      val ofAll = elem._2.size / dataSet.size * 100
+
+      builder.append(elem._1.address.port + "  " + ofAll + "%\n")
+    }
+
+    builder.toString()
   }
 
   def receive = {
@@ -41,14 +55,38 @@ class ClusterStatsPresenterActor extends Actor {
     case Terminated(a) =>
       databaseBackends = databaseBackends.filterNot(_ == a)
 
-    case Result(value) =>
-      value match {
-        case Some(value) => printf("Received value: " + value)
-        case _ => printf("No such key in the database")
+    case StatusReport(member, data) =>
+      println("received status report")
+      receivedReports += 1
+      dataSet = dataSet ++ data.values
+
+      nodeDataSet.put(member, data.values.toSet)
+
+      if(receivedReports == databaseBackends.size)
+        print(printReport())
+
+    case msg: String =>
+      println(msg)
+
+    case PrepareReport() =>
+      println("preparing report")
+      println("prepare 2")
+
+      receivedReports = 0
+      dataSet = Set[String]()
+
+      for (elem <- databaseBackends) {
+        elem ! SendStatusReport()
       }
 
+      println(databaseBackends.size)
+
     case _ =>
-      printf("No match")
+      println("No match")
+  }
+
+  def prepareReport() = {
+
   }
 }
 
@@ -70,9 +108,13 @@ object ClusterStatsPresenterActor {
 
     val system = ActorSystem("ClusterSystem", config)
     // Create an actor that handles cluster domain events
-    _stats = system.actorOf(Props[FrontendActor], name = "cluster-stats")
+    _stats = system.actorOf(Props[ClusterStatsPresenterActor], name = "cluster-stats")
   }
 
   def getFrontend() = _stats
-  def getProxy() = _proxy
+
+  def prepareReportt() = {
+    println("hehe")
+    _stats ! PrepareReport()
+  }
 }
