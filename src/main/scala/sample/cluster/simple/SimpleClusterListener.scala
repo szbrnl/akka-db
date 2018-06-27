@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Address, RootActorPath}
 import akka.cluster.{Cluster, Member, MemberStatus}
 import akka.cluster.ClusterEvent._
 import akka.cluster.pubsub.DistributedPubSub
-import com.typesafe.config.ConfigException.Null
+import sample.cluster.simple.message.{SendStatusReport, StatusReport}
 import sample.cluster.transformation.BackendRegistration
 
 import scala.collection.mutable
@@ -122,6 +122,10 @@ class SimpleClusterListener extends Actor with ActorLogging {
         context.actorSelection(RootActorPath(member.address) / "user" / "frontend-api") !
           BackendRegistration
       }
+      else if(member.hasRole("clusterstats")) {
+        context.actorSelection(RootActorPath(member.address) / "user" / "cluster-stats") !
+          BackendRegistration
+      }
       else {
         currentMember match {
           case None =>
@@ -129,21 +133,22 @@ class SimpleClusterListener extends Actor with ActorLogging {
             if (initNode) {
               log.info("welcome received {}", member.address)
               currentMember = Some(member)
+              nodes = nodes.+((member.address.port.hashCode(), member))
             }
           case _ =>
             // old node
             context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! WelcomeMessage(member)
             nodes = nodes.+((member.address.port.hashCode, member))
 
-            var pack = mutable.Map[String, String]()
-            for ((key, value) <- dataMap){
-              if (findSuccessorNode(key).get == member.address) {
-                pack.put(key, value)
-                dataMap.remove(key)
-              }
-              context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! DataPackage(pack)
-              context.actorSelection(RootActorPath(findSuccessorNode(member.address).get) / "user" / "clusterListener") ! DataPackage(pack)
-            }
+//            var pack = mutable.Map[String, String]()
+//            for ((key, value) <- dataMap){
+//              if (findSuccessorNode(key).get == member.address) {
+//                pack.put(key, value)
+//                dataMap.remove(key)
+//              }
+//              context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! DataPackage(pack)
+//              context.actorSelection(RootActorPath(findSuccessorNode(member.address).get) / "user" / "clusterListener") ! DataPackage(pack)
+//            }
 
 
         }
@@ -169,30 +174,31 @@ class SimpleClusterListener extends Actor with ActorLogging {
         member.address, previousStatus)
       nodes = nodes.-(member.address.port.hashCode)
 
-      if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
-
-        // copy data for which the removed member was the primary node (copy to the successor or current node)
-        // if current node is 3 and the removed one was 2
-        //    you need to know the hash of node 2 and the data from node 3 (current node)
-        //    you copy the data to node 4
-        val hashPos = member.address.port.hashCode
-        var pack : mutable.Map[String, String] = mutable.Map[String, String]()
-        for ((key, value) <- dataMap) {
-          if (key.hashCode <= hashPos ||
-             (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.hashCode) {
-            pack.+((key, value))
-          }
-        }
-        context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port).get) / "user" / "clusterListener") ! DataPackage(pack)
-
-        // copy data for which the removed member was the backup node (copy to the current node)
-        // if current node is 3 and the removed one was 2
-        //    you need to know the hash of node 0 and the data from node 1
-        //    you copy the data to node 3 (current node)
-
-        // sending request to the predecessor of the removed node (removed node is no longer in 'nodes')
-        context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address).get) / "user" / "clusterListener") ! DataPackageRequest()
-      }
+      // TODO
+//      if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
+//
+//        // copy data for which the removed member was the primary node (copy to the successor or current node)
+//        // if current node is 3 and the removed one was 2
+//        //    you need to know the hash of node 2 and the data from node 3 (current node)
+//        //    you copy the data to node 4
+//        val hashPos = member.address.port.hashCode
+//        var pack : mutable.Map[String, String] = mutable.Map[String, String]()
+//        for ((key, value) <- dataMap) {
+//          if (key.hashCode <= hashPos ||
+//             (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.hashCode) {
+//            pack.+((key, value))
+//          }
+//        }
+//        context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port).get) / "user" / "clusterListener") ! DataPackage(pack)
+//
+//        // copy data for which the removed member was the backup node (copy to the current node)
+//        // if current node is 3 and the removed one was 2
+//        //    you need to know the hash of node 0 and the data from node 1
+//        //    you copy the data to node 3 (current node)
+//
+//        // sending request to the predecessor of the removed node (removed node is no longer in 'nodes')
+//        context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address).get) / "user" / "clusterListener") ! DataPackageRequest()
+//      }
 
 
     case DataPackage(pack : mutable.Map[String, String]) =>
@@ -263,10 +269,15 @@ class SimpleClusterListener extends Actor with ActorLogging {
     case RealDelete(key) =>
       dataMap.remove(key)
 
+    case SendStatusReport() =>
+      println("sending status report")
+      sender ! StatusReport(currentMember.get, dataMap)
 
     //TODO
     case GetQuorum(key) =>
     //TODO
+
+
 
 
     case _: MemberEvent => // ignore
