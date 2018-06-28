@@ -36,70 +36,6 @@ class SimpleClusterListener extends Actor with ActorLogging {
 
   override def postStop(): Unit = cluster.unsubscribe(self)
 
-
-  def findSuccessorNode(keyHashCode: Int): Option[Address] = {
-    //TODO Wydaje mi się że nigdy nie będzie pusty
-    //    if (nodes.isEmpty) {
-    //      println("No nodes in cluster")
-    //      return None
-    //    }
-
-    nodes.dropWhile(_._1 <= keyHashCode) match {
-      case x if x.isEmpty =>
-        Some(nodes.head._2.address)
-      case x =>
-        Some(x.head._2.address)
-    }
-
-    //    if (nodes.isEmpty) {
-    //      println("No nodes in cluster")
-    //      None
-    //    }
-    //
-    //    for (node <- nodes) {
-    //      if (node._1 > keyHashCode)
-    //        return Some(node._2.address)
-    //    }
-    //
-    //    Some(nodes.head._2.address)
-
-
-  }
-
-
-  // returns true if the current node is the successor of the node with a given address
-  def harryYouAreTheChosenOne(addr: Address): Boolean = {
-    currentMember.get.address == findSuccessorNode(addr.port.hashCode()).get
-  }
-
-
-  def findPredecessorNode(key: Object): Option[Address] = {
-    // TODO tu też raczej nie będzie nigdy takiej sytuacji
-    if (nodes.isEmpty) {
-      println("No nodes in cluster pred")
-      None
-    }
-    else {
-
-      nodes.takeWhile(_._1 <= key.hashCode()) match {
-        case x if x.isEmpty =>
-          Some(nodes.last._2.address)
-        case x =>
-          Some(x.last._2.address)
-      }
-
-      //
-      //      var addr = nodes.last._2.address
-      //      for (node <- nodes) {
-      //        if (node._1 > key.hashCode)
-      //          return Some(addr)
-      //        addr = node._2.address
-      //      }
-      //      Some(nodes.last._2.address)
-    }
-  }
-
-
   def receive = {
     case msg: String =>
       log.info(msg)
@@ -130,6 +66,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
               nodes = nodes.+((member.address.port.hashCode(), member))
             }
           case _ =>
+            println("old node")
             // old node
             context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! WelcomeMessage(member)
             nodes = nodes.+((member.address.port.hashCode, member))
@@ -173,30 +110,30 @@ class SimpleClusterListener extends Actor with ActorLogging {
       nodes = nodes.-(member.address.port.hashCode)
 
 
-         if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
+      if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
 
-           // copy data for which the removed member was the primary node (copy to the successor or current node)
-           // if current node is 3 and the removed one was 2
-           //    you need to know the hash of node 2 and the data from node 3 (current node)
-           //    you copy the data to node 4
-            val hashPos = member.address.port.hashCode
-            var pack : mutable.Map[String, String] = mutable.Map[String, String]()
-            for ((key, value) <- dataMap) {
-              if (key.hashCode <= hashPos ||
-                 (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.hashCode) {
-                pack.put(key, value)
-              }
-            }
-            context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port.get).get) / "user" / "clusterListener") ! DataPackage(pack)
-
-            // copy data for which the removed member was the backup node (copy to the current node)
-            // if current node is 3 and the removed one was 2
-            //    you need to know the hash of node 0 and the data from node 1
-           //    you copy the data to node 3 (current node)
-    //
-    //        // sending request to the predecessor of the removed node (removed node is no longer in 'nodes')
-            context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address.port).get) / "user" / "clusterListener") ! DataPackageRequest()
+        // copy data for which the removed member was the primary node (copy to the successor or current node)
+        // if current node is 3 and the removed one was 2
+        //    you need to know the hash of node 2 and the data from node 3 (current node)
+        //    you copy the data to node 4
+        val hashPos = member.address.port.hashCode
+        var pack: mutable.Map[String, String] = mutable.Map[String, String]()
+        for ((key, value) <- dataMap) {
+          if (key.hashCode <= hashPos ||
+            (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.hashCode) {
+            pack.put(key, value)
           }
+        }
+        context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port.get).get) / "user" / "clusterListener") ! DataPackage(pack)
+
+        // copy data for which the removed member was the backup node (copy to the current node)
+        // if current node is 3 and the removed one was 2
+        //    you need to know the hash of node 0 and the data from node 1
+        //    you copy the data to node 3 (current node)
+
+        // sending request to the predecessor of the removed node (removed node is no longer in 'nodes')
+        context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address.port).get) / "user" / "clusterListener") ! DataPackageRequest()
+      }
 
 
     case DataPackage(pack: mutable.Map[String, String]) =>
@@ -275,4 +212,30 @@ class SimpleClusterListener extends Actor with ActorLogging {
 
     case _: MemberEvent => // ignore
   }
+
+  def findSuccessorNode(keyHashCode: Int): Option[Address] = {
+    nodes.dropWhile(_._1 <= keyHashCode) match {
+      case x if x.isEmpty =>
+        Some(nodes.head._2.address)
+      case x =>
+        Some(x.head._2.address)
+    }
+  }
+
+
+  // returns true if the current node is the successor of the node with a given address
+  def harryYouAreTheChosenOne(addr: Address): Boolean = {
+    currentMember.get.address == findSuccessorNode(addr.port.hashCode()).get
+  }
+
+
+  def findPredecessorNode(key: Object): Option[Address] = {
+    nodes.takeWhile(_._1 <= key.hashCode()) match {
+      case x if x.isEmpty =>
+        Some(nodes.last._2.address)
+      case x =>
+        Some(x.last._2.address)
+    }
+  }
+
 }
