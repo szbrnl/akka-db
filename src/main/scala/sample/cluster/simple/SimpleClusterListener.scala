@@ -172,31 +172,31 @@ class SimpleClusterListener extends Actor with ActorLogging {
         member.address, previousStatus)
       nodes = nodes.-(member.address.port.hashCode)
 
-    // TODO
-    //      if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
-    //
-    //        // copy data for which the removed member was the primary node (copy to the successor or current node)
-    //        // if current node is 3 and the removed one was 2
-    //        //    you need to know the hash of node 2 and the data from node 3 (current node)
-    //        //    you copy the data to node 4
-    //        val hashPos = member.address.port.hashCode
-    //        var pack : mutable.Map[String, String] = mutable.Map[String, String]()
-    //        for ((key, value) <- dataMap) {
-    //          if (key.hashCode <= hashPos ||
-    //             (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.hashCode) {
-    //            pack.+((key, value))
-    //          }
-    //        }
-    //        context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port).get) / "user" / "clusterListener") ! DataPackage(pack)
-    //
-    //        // copy data for which the removed member was the backup node (copy to the current node)
-    //        // if current node is 3 and the removed one was 2
-    //        //    you need to know the hash of node 0 and the data from node 1
-    //        //    you copy the data to node 3 (current node)
+
+         if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
+
+           // copy data for which the removed member was the primary node (copy to the successor or current node)
+           // if current node is 3 and the removed one was 2
+           //    you need to know the hash of node 2 and the data from node 3 (current node)
+           //    you copy the data to node 4
+            val hashPos = member.address.port.hashCode
+            var pack : mutable.Map[String, String] = mutable.Map[String, String]()
+            for ((key, value) <- dataMap) {
+              if (key.hashCode <= hashPos ||
+                 (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.hashCode) {
+                pack.put(key, value)
+              }
+            }
+            context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port.get).get) / "user" / "clusterListener") ! DataPackage(pack)
+
+            // copy data for which the removed member was the backup node (copy to the current node)
+            // if current node is 3 and the removed one was 2
+            //    you need to know the hash of node 0 and the data from node 1
+           //    you copy the data to node 3 (current node)
     //
     //        // sending request to the predecessor of the removed node (removed node is no longer in 'nodes')
-    //        context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address).get) / "user" / "clusterListener") ! DataPackageRequest()
-    //      }
+            context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address.port).get) / "user" / "clusterListener") ! DataPackageRequest()
+          }
 
 
     case DataPackage(pack: mutable.Map[String, String]) =>
