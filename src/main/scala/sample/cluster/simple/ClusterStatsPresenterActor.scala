@@ -19,10 +19,10 @@ class ClusterStatsPresenterActor extends Actor {
   var dataSet: Set[String] = Set[String]()
   var nodeDataSet: mutable.HashMap[Member, Set[String]] = mutable.HashMap()
 
-  val proxy: ActorRef = context.system.actorOf (
-    ClusterSingletonProxy.props (
+  val proxy: ActorRef = context.system.actorOf(
+    ClusterSingletonProxy.props(
       singletonManagerPath = "/user/cluster-stats",
-      settings = ClusterSingletonProxySettings (context.system).withRole ("clusterstats") ),
+      settings = ClusterSingletonProxySettings(context.system).withRole("clusterstats")),
     name = "consumerProxyStats")
 
   override def preStart(): Unit = {
@@ -33,14 +33,11 @@ class ClusterStatsPresenterActor extends Actor {
     cluster.unsubscribe(self)
   }
 
-  def printReport(): String = {
+  def generateReport(): String = {
     val builder = new mutable.StringBuilder()
 
-    for (elem <- nodeDataSet) {
-      val ofAll = elem._2.size / dataSet.size * 100
-
-      builder.append(elem._1.address.port + "  " + ofAll + "%\n")
-    }
+    nodeDataSet.foreach(elem =>
+      builder.append(elem._1.address.port.get + "  " + elem._2.size + "/" + dataSet.size + "%\n"))
 
     builder.toString()
   }
@@ -48,53 +45,38 @@ class ClusterStatsPresenterActor extends Actor {
   def receive = {
 
     case BackendRegistration if !databaseBackends.contains(sender()) =>
-      println("hellooooooo")
+      println("[INFO] Backend node detected")
       databaseBackends = databaseBackends :+ sender()
       context watch sender()
+
 
     case Terminated(a) =>
       databaseBackends = databaseBackends.filterNot(_ == a)
 
+
     case StatusReport(member, data) =>
-      println("received status report")
       receivedReports += 1
-      dataSet = dataSet ++ data.values
 
-      nodeDataSet.put(member, data.values.toSet)
+      dataSet = dataSet ++ data.keys
+      nodeDataSet.put(member, data.keys.toSet)
 
-      if(receivedReports == databaseBackends.size)
-        print(printReport())
+      if (receivedReports == databaseBackends.size)
+        println(generateReport())
 
-    case msg: String =>
-      println(msg)
 
     case PrepareReport() =>
-      println("preparing report")
-      println("prepare 2")
-
       receivedReports = 0
       dataSet = Set[String]()
 
-      for (elem <- databaseBackends) {
-        elem ! SendStatusReport()
-      }
+      databaseBackends.foreach(x => x ! SendStatusReport())
 
-      println(databaseBackends.size)
-
-    case _ =>
-      println("No match")
-  }
-
-  def prepareReport() = {
-
+    case _ => // Ignore
   }
 }
 
 
 object ClusterStatsPresenterActor {
   private var _stats: ActorRef = _
-  private var _proxy:ActorRef = _
-
 
   def initiate(): Unit = {
     val port = "0"
@@ -107,14 +89,12 @@ object ClusterStatsPresenterActor {
       .withFallback(ConfigFactory.load())
 
     val system = ActorSystem("ClusterSystem", config)
+
     // Create an actor that handles cluster domain events
     _stats = system.actorOf(Props[ClusterStatsPresenterActor], name = "cluster-stats")
   }
 
-  def getFrontend() = _stats
-
-  def prepareReportt() = {
-    println("hehe")
+  def prepareReport(): Unit = {
     _stats ! PrepareReport()
   }
 }
