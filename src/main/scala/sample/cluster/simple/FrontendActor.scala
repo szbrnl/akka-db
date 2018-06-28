@@ -35,7 +35,7 @@ class FrontendActor extends Actor {
 
     case msg: String =>
       println(msg)
-      databaseBackends(Random.nextInt(databaseBackends.size)) forward msg
+      println(databaseBackends.size)
 
     case addKeyVal: Add =>
       println(databaseBackends.size.toString)
