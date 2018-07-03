@@ -60,16 +60,18 @@ class SimpleClusterListener extends Actor with ActorLogging {
             if (initNode) {
               log.info("welcome received {}", member.address)
               currentMember = Some(member)
-              nodes = nodes.+((member.address.port.hashCode(), member))
+              nodes = nodes.+((member.address.port.get.hashCode(), member))
             }
             else {
-              nodes = nodes.+((member.address.port.hashCode(), member))
+              nodes = nodes.+((member.address.port.get.hashCode(), member))
             }
+
+
           case _ =>
             println("old node")
             // old node
             context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! WelcomeMessage(member)
-            nodes = nodes.+((member.address.port.hashCode, member))
+            nodes = nodes.+((member.address.port.get.hashCode, member))
 
             // New node detected
             var pack = mutable.Map[String, String]()
@@ -81,7 +83,8 @@ class SimpleClusterListener extends Actor with ActorLogging {
             }
             println("[INFO] Migrating data")
             context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! DataPackage(pack)
-            context.actorSelection(RootActorPath(findSuccessorNode(member.address.hashCode).get) / "user" / "clusterListener") ! DataPackage(pack)
+            if (member.address != findSuccessorNode(member.address.port.get.hashCode()).get)
+                context.actorSelection(RootActorPath(findSuccessorNode(member.address.port.get.hashCode()).get) / "user" / "clusterListener") ! DataPackage(pack)
         }
 
 
@@ -107,24 +110,24 @@ class SimpleClusterListener extends Actor with ActorLogging {
     case MemberRemoved(member, previousStatus) =>
       log.info("Member is Removed: {} after {}",
         member.address, previousStatus)
-      nodes = nodes.-(member.address.port.hashCode)
+      nodes = nodes.-(member.address.port.get.hashCode)
 
 
-      if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
+       if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
 
         // copy data for which the removed member was the primary node (copy to the successor or current node)
         // if current node is 3 and the removed one was 2
         //    you need to know the hash of node 2 and the data from node 3 (current node)
         //    you copy the data to node 4
-        val hashPos = member.address.port.hashCode
+        val hashPos = member.address.port.get.hashCode
         var pack: mutable.Map[String, String] = mutable.Map[String, String]()
         for ((key, value) <- dataMap) {
           if (key.hashCode <= hashPos ||
-            (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.hashCode) {
+            (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.get.hashCode) {
             pack.put(key, value)
           }
         }
-        context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port.get).get) / "user" / "clusterListener") ! DataPackage(pack)
+        context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port.get.hashCode()).get) / "user" / "clusterListener") ! DataPackage(pack)
 
         // copy data for which the removed member was the backup node (copy to the current node)
         // if current node is 3 and the removed one was 2
@@ -161,7 +164,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
       println("dodawanie " + key + " " + value)
 
       val minAddr = findSuccessorNode(key.hashCode).get
-      val nextMinAddr = findSuccessorNode(minAddr.port.hashCode() + 1).get
+      val nextMinAddr = findSuccessorNode(minAddr.port.get.hashCode() + 1).get
 
       context.actorSelection(RootActorPath(minAddr) / "user" / "clusterListener") ! RealAdd(key, value)
 
@@ -196,7 +199,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
 
     case Delete(key) =>
       val addr = findSuccessorNode(key.hashCode).get
-      val nextAddr = findSuccessorNode(addr.hashCode).get
+      val nextAddr = findSuccessorNode(addr.port.get.hashCode()).get
       context.actorSelection(RootActorPath(addr) / "user" / "clusterListener") ! RealDelete(key)
       context.actorSelection(RootActorPath(nextAddr) / "user" / "clusterListener") ! RealDelete(key)
 
@@ -225,7 +228,7 @@ class SimpleClusterListener extends Actor with ActorLogging {
 
   // returns true if the current node is the successor of the node with a given address
   def harryYouAreTheChosenOne(addr: Address): Boolean = {
-    currentMember.get.address == findSuccessorNode(addr.port.hashCode()).get
+    currentMember.get.address == findSuccessorNode(addr.port.get.hashCode()).get
   }
 
 
