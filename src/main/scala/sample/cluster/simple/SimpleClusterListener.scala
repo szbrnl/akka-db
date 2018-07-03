@@ -56,8 +56,10 @@ class SimpleClusterListener extends Actor with ActorLogging {
       else {
         currentMember match {
           case None =>
+            println("None")
             // new node
             if (initNode) {
+              println("I'm new")
               log.info("welcome received {}", member.address)
               currentMember = Some(member)
               nodes = nodes.+((member.address.port.get.hashCode(), member))
@@ -82,8 +84,9 @@ class SimpleClusterListener extends Actor with ActorLogging {
               }
             }
             println("[INFO] Migrating data")
-            context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! DataPackage(pack)
-            if (member.address != findSuccessorNode(member.address.port.get.hashCode()).get)
+            if (member.address != currentMember.get.address)
+              context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! DataPackage(pack)
+            if (member.address != findSuccessorNode(member.address.port.get.hashCode()).get && findSuccessorNode(member.address.port.get.hashCode()).get != currentMember.get.address)
                 context.actorSelection(RootActorPath(findSuccessorNode(member.address.port.get.hashCode()).get) / "user" / "clusterListener") ! DataPackage(pack)
         }
 
