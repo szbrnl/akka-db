@@ -68,6 +68,7 @@ class ClusterStatsPresenterActor extends Actor {
     case PrepareReport() =>
       receivedReports = 0
       dataSet = Set[String]()
+      nodeDataSet = mutable.HashMap[Member, Set[String]]()
 
       databaseBackends.foreach(x => x ! SendStatusReport())
 
