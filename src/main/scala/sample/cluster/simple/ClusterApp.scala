@@ -2,8 +2,9 @@ package sample.cluster.simple
 
 import akka.actor.{ActorSystem, Props}
 import com.typesafe.config.ConfigFactory
+import sample.cluster.simple.actor.ClusterListener
 
-object SimpleClusterApp {
+object ClusterApp {
   def main(args: Array[String]): Unit = {
     if (args.isEmpty)
       startup(Seq("2551"))
@@ -25,7 +26,7 @@ object SimpleClusterApp {
       val system = ActorSystem("ClusterSystem", config)
 
       // Create an actor that handles cluster domain events
-      system.actorOf(Props[SimpleClusterListener], name = "clusterListener")
+      system.actorOf(Props[ClusterListener], name = "clusterListener")
 
     }
   }

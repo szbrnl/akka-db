@@ -1,11 +1,11 @@
-package sample.cluster.simple
+package sample.cluster.simple.actor
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props, Terminated}
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.MemberUp
-import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
+import akka.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
 import com.typesafe.config.ConfigFactory
-import sample.cluster.transformation.BackendRegistration
+import sample.cluster.simple.message.{Add, BackendRegistration, GetOne, Result}
 
 import scala.util.Random
 
@@ -15,12 +15,11 @@ class FrontendActor extends Actor {
   var databaseBackends: IndexedSeq[ActorRef] = IndexedSeq.empty[ActorRef]
   val cluster = Cluster(context.system)
 
-  val proxy: ActorRef = context.system.actorOf (
-    ClusterSingletonProxy.props (
+  val proxy: ActorRef = context.system.actorOf(
+    ClusterSingletonProxy.props(
       singletonManagerPath = "/user/frontend-api",
-      settings = ClusterSingletonProxySettings (context.system).withRole ("frontendapi") ),
+      settings = ClusterSingletonProxySettings(context.system).withRole("frontendapi")),
     name = "consumerProxy")
-
 
 
   override def preStart(): Unit = {
@@ -31,7 +30,7 @@ class FrontendActor extends Actor {
     cluster.unsubscribe(self)
   }
 
-  def receive = {
+  def receive: PartialFunction[Any, Unit] = {
 
     case msg: String =>
       println(msg)
@@ -57,7 +56,7 @@ class FrontendActor extends Actor {
 
     case Result(value) =>
       value match {
-        case Some(value) => printf("Received value: " + value)
+        case Some(v) => printf("Received value: " + v)
         case _ => printf("No such key in the database")
       }
 
@@ -70,7 +69,7 @@ class FrontendActor extends Actor {
 
 object FrontendActor {
   private var _frontend: ActorRef = _
-  private var _proxy:ActorRef = _
+  private var _proxy: ActorRef = _
 
 
   def initiate(): Unit = {
@@ -89,5 +88,4 @@ object FrontendActor {
   }
 
   def getFrontend() = _frontend
-  def getProxy() = _proxy
 }

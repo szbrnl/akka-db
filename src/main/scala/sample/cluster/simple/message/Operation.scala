@@ -1,7 +1,6 @@
-package sample.cluster.simple
+package sample.cluster.simple.message
 
 import akka.actor.ActorRef
-import io.aeron.driver.Sender
 
 import scala.collection.mutable
 
@@ -16,3 +15,5 @@ case class RealGetOne(key: String, sender: ActorRef)
 case class Result(value: Option[String])
 case class Delete(key: String)
 case class RealDelete(key: String)
+
+case object BackendRegistration

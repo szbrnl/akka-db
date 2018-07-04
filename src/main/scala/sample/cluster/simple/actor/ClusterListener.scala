@@ -1,16 +1,15 @@
-package sample.cluster.simple
+package sample.cluster.simple.actor
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Address, RootActorPath}
-import akka.cluster.{Cluster, Member, MemberStatus}
 import akka.cluster.ClusterEvent._
 import akka.cluster.pubsub.DistributedPubSub
-import sample.cluster.simple.message.{SendStatusReport, StatusReport}
-import sample.cluster.transformation.BackendRegistration
+import akka.cluster.{Cluster, Member, MemberStatus}
+import sample.cluster.simple.message._
 
 import scala.collection.mutable
 
 
-class SimpleClusterListener extends Actor with ActorLogging {
+class ClusterListener extends Actor with ActorLogging {
 
 
   val cluster = Cluster(context.system)
