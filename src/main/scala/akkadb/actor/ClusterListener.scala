@@ -116,11 +116,13 @@ class ClusterListener extends Actor with ActorLogging {
         val hashPos = member.address.port.get.hashCode
         val pack: mutable.Map[String, String] = mutable.Map[String, String]()
         for ((key, value) <- dataMap) {
+          print(key, value, key.hashCode, hashPos)
           if (key.hashCode <= hashPos ||
             (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.get.hashCode) {
             pack.put(key, value)
           }
         }
+        println(pack)
         context.actorSelection(RootActorPath(findSuccessorNode(currentMember.get.address.port.get.hashCode()).get) / "user" / "clusterListener") ! DataPackage(pack)
 
         // copy data for which the removed member was the backup node (copy to the current node)
@@ -129,7 +131,7 @@ class ClusterListener extends Actor with ActorLogging {
         //    you copy the data to node 3 (current node)
 
         // sending request to the predecessor of the removed node (removed node is no longer in 'nodes')
-        context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address.port).get) / "user" / "clusterListener") ! DataPackageRequest()
+        context.actorSelection(RootActorPath(findPredecessorNode(currentMember.get.address.port.get).get) / "user" / "clusterListener") ! DataPackageRequest()
       }
 
 
@@ -144,7 +146,7 @@ class ClusterListener extends Actor with ActorLogging {
     // to find the data for which the removed node was the backup node we have to find all data for which the predecessor of the removed node is the primary node
     case DataPackageRequest() =>
       println("Data Package Request")
-      val map: mutable.Map[String, String] = mutable.Map[String, String]()
+      var map: mutable.Map[String, String] = mutable.Map[String, String]()
       for ((key, value) <- dataMap) {
         if (findSuccessorNode(key.hashCode).get == currentMember.get.address) {
           println("key: " + key + " value: " + value)
@@ -225,8 +227,8 @@ class ClusterListener extends Actor with ActorLogging {
   }
 
 
-  def findPredecessorNode(key: Object): Option[Address] = {
-    nodes.takeWhile(_._1 <= key.hashCode()) match {
+  def findPredecessorNode(key: Int): Option[Address] = {
+    nodes.takeWhile(_._1 < key.hashCode()) match {
       case x if x.isEmpty =>
         Some(nodes.last._2.address)
       case x =>
