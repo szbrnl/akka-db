@@ -42,7 +42,6 @@ class FrontendActor extends Actor {
       databaseBackends(Random.nextInt(databaseBackends.size)) forward addKeyVal
 
     case BackendRegistration if !databaseBackends.contains(sender()) =>
-      println("hellooooooo")
       databaseBackends = databaseBackends :+ sender()
       context watch sender()
 
@@ -62,14 +61,13 @@ class FrontendActor extends Actor {
 
 
     case _ =>
-      printf("No match")
+    // Ignore
   }
 }
 
 
 object FrontendActor {
-  private var _frontend: ActorRef = _
-  private var _proxy: ActorRef = _
+  private var _frontend: Option[ActorRef] = None
 
 
   def initiate(): Unit = {
@@ -84,8 +82,15 @@ object FrontendActor {
 
     val system = ActorSystem("ClusterSystem", config)
     // Create an actor that handles cluster domain events
-    _frontend = system.actorOf(Props[FrontendActor], name = "frontend-api")
+    _frontend = Some(system.actorOf(Props[FrontendActor], name = "frontend-api"))
   }
 
-  def getFrontend() = _frontend
+  def getFrontend: ActorRef = {
+    _frontend match {
+      case None => initiate()
+      case _ => // Ignore
+    }
+
+    _frontend.get
+  }
 }

@@ -41,7 +41,7 @@ class ClusterStatsPresenterActor extends Actor {
     builder.toString()
   }
 
-  def receive = {
+  def receive: PartialFunction[Any, Unit] = {
 
     case BackendRegistration if !databaseBackends.contains(sender()) =>
       println("[INFO] Backend node detected")
@@ -61,7 +61,7 @@ class ClusterStatsPresenterActor extends Actor {
 
       if (receivedReports == databaseBackends.size)
         println()
-        println(generateReport())
+      println(generateReport())
 
 
     case PrepareReport() =>
@@ -77,7 +77,7 @@ class ClusterStatsPresenterActor extends Actor {
 
 
 object ClusterStatsPresenterActor {
-  private var _stats: ActorRef = _
+  private var _stats: Option[ActorRef] = None
 
   def initiate(): Unit = {
     val port = "0"
@@ -92,10 +92,15 @@ object ClusterStatsPresenterActor {
     val system = ActorSystem("ClusterSystem", config)
 
     // Create an actor that handles cluster domain events
-    _stats = system.actorOf(Props[ClusterStatsPresenterActor], name = "cluster-stats")
+    _stats = Some(system.actorOf(Props[ClusterStatsPresenterActor], name = "cluster-stats"))
   }
 
   def prepareReport(): Unit = {
-    _stats ! PrepareReport()
+    _stats match {
+      case None => initiate()
+      case _ => // Ignore
+    }
+
+    _stats.get ! PrepareReport()
   }
 }

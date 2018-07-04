@@ -10,8 +10,6 @@ import scala.collection.mutable
 
 
 class ClusterListener extends Actor with ActorLogging {
-
-
   val cluster = Cluster(context.system)
   val mediator: ActorRef = DistributedPubSub(context.system).mediator
 
@@ -25,6 +23,7 @@ class ClusterListener extends Actor with ActorLogging {
 
   // subscribe to cluster changes, re-subscribe when restart
   override def preStart(): Unit = {
+    // Determine if it's first node in the cluster
     if (cluster.state.members.count(_.status == MemberStatus.up) == 1) {
       initNode = true
     }
@@ -35,7 +34,7 @@ class ClusterListener extends Actor with ActorLogging {
 
   override def postStop(): Unit = cluster.unsubscribe(self)
 
-  def receive = {
+  def receive: PartialFunction[Any, Unit] = {
     case msg: String =>
       log.info(msg)
       println(currentMember.get.address)
@@ -55,10 +54,9 @@ class ClusterListener extends Actor with ActorLogging {
       else {
         currentMember match {
           case None =>
-            println("None")
+
             // new node
             if (initNode) {
-              println("I'm new")
               log.info("welcome received {}", member.address)
               currentMember = Some(member)
               nodes = nodes.+((member.address.port.get.hashCode(), member))
@@ -69,13 +67,12 @@ class ClusterListener extends Actor with ActorLogging {
 
 
           case _ =>
-            println("old node")
             // old node
             context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! WelcomeMessage(member)
             nodes = nodes.+((member.address.port.get.hashCode, member))
 
             // New node detected
-            var pack = mutable.Map[String, String]()
+            val pack = mutable.Map[String, String]()
             for ((key, value) <- dataMap) {
               if (findSuccessorNode(key.hashCode).get == member.address) {
                 pack.put(key, value)
@@ -86,13 +83,9 @@ class ClusterListener extends Actor with ActorLogging {
             if (member.address != currentMember.get.address)
               context.actorSelection(RootActorPath(member.address) / "user" / "clusterListener") ! DataPackage(pack)
             if (member.address != findSuccessorNode(member.address.port.get.hashCode()).get && findSuccessorNode(member.address.port.get.hashCode()).get != currentMember.get.address)
-                context.actorSelection(RootActorPath(findSuccessorNode(member.address.port.get.hashCode()).get) / "user" / "clusterListener") ! DataPackage(pack)
+              context.actorSelection(RootActorPath(findSuccessorNode(member.address.port.get.hashCode()).get) / "user" / "clusterListener") ! DataPackage(pack)
         }
-
-
       }
-
-      println(nodes.size)
 
 
     case WelcomeMessage(member) =>
@@ -101,7 +94,6 @@ class ClusterListener extends Actor with ActorLogging {
           log.info("welcome1 received {}", member.address)
           currentMember = Some(member)
         case _ => // Ignore
-
       }
 
 
@@ -115,14 +107,14 @@ class ClusterListener extends Actor with ActorLogging {
       nodes = nodes.-(member.address.port.get.hashCode)
 
 
-       if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
+      if (harryYouAreTheChosenOne(member.address) && !member.hasRole("frontendapi")) {
 
         // copy data for which the removed member was the primary node (copy to the successor or current node)
         // if current node is 3 and the removed one was 2
         //    you need to know the hash of node 2 and the data from node 3 (current node)
         //    you copy the data to node 4
         val hashPos = member.address.port.get.hashCode
-        var pack: mutable.Map[String, String] = mutable.Map[String, String]()
+        val pack: mutable.Map[String, String] = mutable.Map[String, String]()
         for ((key, value) <- dataMap) {
           if (key.hashCode <= hashPos ||
             (key.hashCode > hashPos) && key.hashCode > nodes.last._2.address.port.get.hashCode) {
@@ -163,7 +155,7 @@ class ClusterListener extends Actor with ActorLogging {
 
 
     case Add(key: String, value: String) =>
-      println("dodawanie " + key + " " + value)
+      println("Adding " + key + " " + value)
 
       val minAddr = findSuccessorNode(key.hashCode).get
       val nextMinAddr = findSuccessorNode(minAddr.port.get.hashCode() + 1).get
@@ -175,16 +167,15 @@ class ClusterListener extends Actor with ActorLogging {
 
 
     case RealAdd(key: String, value: String) =>
-      println("real add: " + key + " " + value)
+      println("Added: " + key + " " + value)
       dataMap.put(key, value)
       for ((key, value) <- dataMap)
         printf(key + " " + value + "\n")
 
 
-    // TODO
     case GetOne(key) =>
-      sender ! "getOne here"
       context.actorSelection(RootActorPath(findSuccessorNode(key.hashCode).get) / "user" / "clusterListener") ! RealGetOne(key, sender)
+
 
     case RealGetOne(key, node) =>
       for ((key, value) <- dataMap)
@@ -211,7 +202,7 @@ class ClusterListener extends Actor with ActorLogging {
 
 
     case SendStatusReport() =>
-      println("sending status report")
+      println("Sending status report")
       sender ! StatusReport(currentMember.get, dataMap)
 
 
