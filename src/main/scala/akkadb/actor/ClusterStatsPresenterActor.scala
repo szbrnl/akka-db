@@ -1,11 +1,11 @@
-package sample.cluster.simple.actor
+package akkadb.actor
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props, Terminated}
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
 import akka.cluster.{Cluster, Member}
+import akkadb.message.{BackendRegistration, PrepareReport, SendStatusReport, StatusReport}
 import com.typesafe.config.ConfigFactory
-import sample.cluster.simple.message.{BackendRegistration, PrepareReport, SendStatusReport, StatusReport}
 
 import scala.collection.mutable
 

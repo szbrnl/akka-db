@@ -1,4 +1,4 @@
-package sample.cluster.simple.message
+package akkadb.message
 
 import akka.cluster.Member
 

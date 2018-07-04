@@ -1,11 +1,11 @@
-package sample.cluster.simple.actor
+package akkadb.actor
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props, Terminated}
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
+import akkadb.message.{Add, BackendRegistration, GetOne, Result}
 import com.typesafe.config.ConfigFactory
-import sample.cluster.simple.message.{Add, BackendRegistration, GetOne, Result}
 
 import scala.util.Random
 

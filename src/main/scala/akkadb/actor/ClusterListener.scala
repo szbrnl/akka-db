@@ -1,10 +1,10 @@
-package sample.cluster.simple.actor
+package akkadb.actor
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Address, RootActorPath}
 import akka.cluster.ClusterEvent._
 import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.{Cluster, Member, MemberStatus}
-import sample.cluster.simple.message._
+import akkadb.message._
 
 import scala.collection.mutable
 
@@ -144,7 +144,7 @@ class ClusterListener extends Actor with ActorLogging {
     // to find the data for which the removed node was the backup node we have to find all data for which the predecessor of the removed node is the primary node
     case DataPackageRequest() =>
       println("Data Package Request")
-      var map: mutable.Map[String, String] = mutable.Map[String, String]()
+      val map: mutable.Map[String, String] = mutable.Map[String, String]()
       for ((key, value) <- dataMap) {
         if (findSuccessorNode(key.hashCode).get == currentMember.get.address) {
           println("key: " + key + " value: " + value)
