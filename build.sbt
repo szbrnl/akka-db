@@ -23,7 +23,7 @@ lazy val `akka-sample-cluster-scala` = project
       "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test,
       "org.scalatest" %% "scalatest" % "3.0.1" % Test),
     fork in run := true,
-    mainClass in (Compile, run) := Some("sample.cluster.simple.SimpleClusterApp"),
+    mainClass in (Compile, run) := Some("akkadb.ClusterApp"),
     // disable parallel tests
     parallelExecution in Test := false,
     licenses := Seq(("CC0", url("http://creativecommons.org/publicdomain/zero/1.0")))
