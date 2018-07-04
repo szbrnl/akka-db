@@ -36,7 +36,7 @@ class ClusterStatsPresenterActor extends Actor {
     val builder = new mutable.StringBuilder()
 
     nodeDataSet.foreach(elem =>
-      builder.append(elem._1.address.port.get + "  " + elem._2.size + "/" + dataSet.size + "\n"))
+      builder.append(elem._1.address.port.get + "  " + elem._2.size + "/" + dataSet.size + " " + elem._1.address.port.get.hashCode() +  "\n" ))
 
     builder.toString()
   }

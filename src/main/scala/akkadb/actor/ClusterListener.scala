@@ -157,7 +157,8 @@ class ClusterListener extends Actor with ActorLogging {
 
 
     case Add(key: String, value: String) =>
-      println("Adding " + key + " " + value)
+
+      println("Adding " + key + " " + value + "  " + key.hashCode)
 
       val minAddr = findSuccessorNode(key.hashCode).get
       val nextMinAddr = findSuccessorNode(minAddr.port.get.hashCode() + 1).get
@@ -169,6 +170,7 @@ class ClusterListener extends Actor with ActorLogging {
 
 
     case RealAdd(key: String, value: String) =>
+      println("[NODE " + currentMember.get.address.port.get.hashCode() + "]")
       println("Added: " + key + " " + value)
       dataMap.put(key, value)
       for ((key, value) <- dataMap)
