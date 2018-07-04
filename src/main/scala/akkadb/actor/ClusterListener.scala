@@ -194,17 +194,6 @@ class ClusterListener extends Actor with ActorLogging {
       }
 
 
-    case Delete(key) =>
-      val addr = findSuccessorNode(key.hashCode).get
-      val nextAddr = findSuccessorNode(addr.port.get.hashCode()).get
-      context.actorSelection(RootActorPath(addr) / "user" / "clusterListener") ! RealDelete(key)
-      context.actorSelection(RootActorPath(nextAddr) / "user" / "clusterListener") ! RealDelete(key)
-
-
-    case RealDelete(key) =>
-      dataMap.remove(key)
-
-
     case SendStatusReport() =>
       println("Sending status report")
       sender ! StatusReport(currentMember.get, dataMap)
